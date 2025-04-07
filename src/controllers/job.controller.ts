@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { Job } from '../models/Job';
+import Job from '../models/Job';
+import { Types } from 'mongoose';
 
 interface AuthRequest extends Request {
   user?: {
@@ -50,19 +51,24 @@ export const getJobs = async (req: Request, res: Response) => {
     }
 
     if (skills) {
-      query.requiredSkills = { $in: (skills as string).split(',') };
+      query.skills = { $in: (skills as string).split(',') };
     }
 
-    // TODO: Add location-based filtering using coordinates
+    if (location) {
+      query.location = location;
+    }
 
     const jobs = await Job.find(query)
-      .populate('client', 'name email')
+      .populate('clientId', 'name email')
       .sort({ createdAt: -1 });
 
     res.json(jobs);
   } catch (error) {
     console.error('Get jobs error:', error);
-    res.status(500).json({ message: 'Error fetching jobs' });
+    res.status(500).json({ 
+      message: 'Error fetching jobs',
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    });
   }
 };
 
@@ -139,12 +145,12 @@ export const applyForJob = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'This job is no longer open' });
     }
 
-    if (job.client.toString() === req.user?.userId) {
+    if (job.clientId.toString() === req.user?.userId) {
       return res.status(400).json({ message: 'You cannot apply to your own job' });
     }
 
-    job.worker = req.user?.userId;
-    job.status = 'assigned';
+    job.workerId = new Types.ObjectId(req.user?.userId);
+    job.status = 'in_progress';
     await job.save();
 
     res.json(job);

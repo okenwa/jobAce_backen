@@ -4,6 +4,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
 import jobRoutes from './routes/job.routes';
+import userRoutes from './routes/user.routes';
+import invoiceRoutes from './routes/invoice.routes';
 
 dotenv.config();
 
@@ -16,6 +18,8 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/invoices', invoiceRoutes);
 
 // Basic route
 app.get('/', (req, res) => {
