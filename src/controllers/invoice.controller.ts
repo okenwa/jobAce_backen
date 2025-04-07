@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import Invoice from '../models/Invoice';
-import { IUser } from '../models/User';
+import { Types } from 'mongoose';
 
 interface AuthRequest extends Request {
   user?: {
@@ -12,22 +12,54 @@ interface AuthRequest extends Request {
 
 export const createInvoice = async (req: AuthRequest, res: Response) => {
   try {
-    const { jobId, clientId, workerId, amount, dueDate } = req.body;
+    const { jobId, amount, description, dueDate } = req.body;
+
+    // Validate required fields
+    if (!jobId || !amount || !description || !dueDate) {
+      return res.status(400).json({ 
+        message: 'Missing required fields',
+        required: ['jobId', 'amount', 'description', 'dueDate']
+      });
+    }
+
+    // Get the job to verify worker and client
+    const job = await mongoose.model('Job').findById(jobId)
+      .populate('clientId workerId');
+
+    if (!job) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+
+    // Verify that the current user is the worker assigned to the job
+    if (job.workerId.toString() !== req.user?.userId) {
+      return res.status(403).json({ message: 'Only the assigned worker can create invoices for this job' });
+    }
 
     const invoice = new Invoice({
       jobId,
-      clientId,
-      workerId,
+      clientId: job.clientId,
+      workerId: req.user.userId,
       amount,
-      dueDate,
+      description,
+      dueDate: new Date(dueDate),
       status: 'pending'
     });
 
     await invoice.save();
-    res.status(201).json(invoice);
+
+    // Populate the invoice with user and job details
+    const populatedInvoice = await Invoice.findById(invoice._id)
+      .populate('jobId', 'title')
+      .populate('clientId', 'name email')
+      .populate('workerId', 'name email');
+
+    res.status(201).json(populatedInvoice);
   } catch (error) {
     console.error('Create invoice error:', error);
-    res.status(500).json({ message: 'Error creating invoice' });
+    res.status(500).json({ 
+      message: 'Error creating invoice',
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    });
   }
 };
 
@@ -57,7 +89,10 @@ export const getInvoices = async (req: AuthRequest, res: Response) => {
     res.json(invoices);
   } catch (error) {
     console.error('Get invoices error:', error);
-    res.status(500).json({ message: 'Error fetching invoices' });
+    res.status(500).json({ 
+      message: 'Error fetching invoices',
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    });
   }
 };
 
@@ -82,7 +117,10 @@ export const getInvoiceById = async (req: AuthRequest, res: Response) => {
     res.json(invoice);
   } catch (error) {
     console.error('Get invoice error:', error);
-    res.status(500).json({ message: 'Error fetching invoice' });
+    res.status(500).json({ 
+      message: 'Error fetching invoice',
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    });
   }
 };
 
@@ -103,9 +141,18 @@ export const updateInvoiceStatus = async (req: AuthRequest, res: Response) => {
     invoice.status = status;
     await invoice.save();
 
-    res.json(invoice);
+    // Return populated invoice
+    const populatedInvoice = await Invoice.findById(invoice._id)
+      .populate('jobId', 'title')
+      .populate('clientId', 'name email')
+      .populate('workerId', 'name email');
+
+    res.json(populatedInvoice);
   } catch (error) {
     console.error('Update invoice error:', error);
-    res.status(500).json({ message: 'Error updating invoice' });
+    res.status(500).json({ 
+      message: 'Error updating invoice',
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    });
   }
 }; 

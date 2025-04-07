@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
-import { User, IUser } from '../models/User';
-import { Document } from 'mongoose';
+import { IUser } from '../models/User';
+import { Document, Types, model } from 'mongoose';
+import User from '../models/User';
 
 interface AuthRequest extends Request {
   user?: {
@@ -77,5 +78,57 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Delete user error:', error);
     res.status(500).json({ message: 'Error deleting user' });
+  }
+};
+
+export const getUserProfile = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.user?.userId)
+      .select('-password -__v');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ 
+      message: 'Error fetching profile',
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    });
+  }
+};
+
+export const updateUserProfile = async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, phone, address, bio, skills } = req.body;
+
+    const user = await User.findById(req.user?.userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Update only the provided fields
+    if (name) user.name = name;
+    if (phone) user.phone = phone;
+    if (address) user.address = address;
+    if (bio) user.bio = bio;
+    if (skills) user.skills = skills;
+
+    await user.save();
+
+    // Return updated user without sensitive fields
+    const updatedUser = await User.findById(user._id)
+      .select('-password -__v');
+
+    res.json(updatedUser);
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ 
+      message: 'Error updating profile',
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    });
   }
 }; 

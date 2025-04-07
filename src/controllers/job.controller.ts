@@ -21,15 +21,24 @@ export const createJob = async (req: AuthRequest, res: Response) => {
       deadline,
     } = req.body;
 
+    // Validate required fields
+    if (!title || !description || !category || !budget || !location || !deadline) {
+      return res.status(400).json({ 
+        message: 'Missing required fields',
+        required: ['title', 'description', 'category', 'budget', 'location', 'deadline']
+      });
+    }
+
     const job = new Job({
       title,
       description,
       category,
       budget,
       location,
-      requiredSkills,
-      deadline,
-      client: req.user?.userId,
+      skills: requiredSkills || [],
+      deadline: new Date(deadline),
+      clientId: req.user?.userId,
+      status: 'open'
     });
 
     await job.save();
@@ -37,7 +46,10 @@ export const createJob = async (req: AuthRequest, res: Response) => {
     res.status(201).json(job);
   } catch (error) {
     console.error('Job creation error:', error);
-    res.status(500).json({ message: 'Error creating job' });
+    res.status(500).json({ 
+      message: 'Error creating job',
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    });
   }
 };
 
